@@ -44,10 +44,11 @@ object Service extends OrderProtocol {
         }
       }
 
+    val hostname = config.getString("api.host")
     val port = config.getInt("api.port")
-    val bindingFuture = Http().bindAndHandle(route, "::0", port)
+    val bindingFuture = Http().bindAndHandle(route, interface = hostname, port = port)
 
-    println(s"Server listening on port ${port}\nPress RETURN to stop...")
+    println(s"Server listening to ${hostname} on port ${port}\nPress RETURN to stop...")
     StdIn.readLine() // let it run until user presses return
     bindingFuture
       .flatMap(_.unbind()) // trigger unbinding from the port
