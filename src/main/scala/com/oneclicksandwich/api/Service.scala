@@ -49,6 +49,17 @@ object Service extends OrderProtocol {
     val bindingFuture = Http().bindAndHandle(route, interface = hostname, port = port)
 
     println(s"Server listening to ${hostname} on port ${port}")
+
+    sys.addShutdownHook({
+      println("Shutting down...")
+
+      bindingFuture
+        .flatMap(_.unbind()) // trigger unbinding from the port
+        .onComplete{_ =>
+          system.terminate()
+          println("Done.")
+        } // and shutdown when done
+    })
   }
 
   private def createOrder(order: Order)(implicit executionContext: ExecutionContext): Future[Order] = {
