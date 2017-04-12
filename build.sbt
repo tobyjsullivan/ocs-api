@@ -1,6 +1,7 @@
-lazy val root = (project in file(".")).
-  settings(
-    name := "sbt-bootstrap",
+lazy val root = (project in file("."))
+  .enablePlugins(JavaAppPackaging)
+  .settings(
+    name := "ocs-api",
     version := "1.0",
     scalaVersion := "2.12.1",
 
@@ -14,3 +15,4 @@ lazy val root = (project in file(".")).
       "com.typesafe" % "config" % "1.3.1"
     )
   )
+
