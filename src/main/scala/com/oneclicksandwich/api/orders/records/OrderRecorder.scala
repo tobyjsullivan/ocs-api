@@ -1,8 +1,7 @@
 package com.oneclicksandwich.api.orders.records
 
 import akka.Done
-import com.amazonaws.auth.AWSCredentials
-import com.amazonaws.auth.profile.ProfileCredentialsProvider
+import com.amazonaws.auth.{DefaultAWSCredentialsProviderChain}
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder
 import com.amazonaws.services.dynamodbv2.document._
@@ -16,7 +15,7 @@ object OrderRecorder {
   private val ordersTable = "ocs-order"
   private lazy val client = AmazonDynamoDBClientBuilder
     .standard()
-    .withCredentials(new ProfileCredentialsProvider())
+    .withCredentials(new DefaultAWSCredentialsProviderChain())
     .withRegion(Regions.US_WEST_2)
     .build()
 
