@@ -7,6 +7,10 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.HttpMethods._
+import akka.http.scaladsl.server._
+import akka.http.scaladsl.model.headers._
 import akka.http.scaladsl.server.Directives._
 import com.oneclicksandwich.api.orders.{Driver, Order}
 import com.oneclicksandwich.api.orders.records.OrderRecorder
@@ -14,16 +18,14 @@ import com.typesafe.config.ConfigFactory
 import spray.json._
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.io.StdIn
-
 
 trait OrderProtocol extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val orderFormat = jsonFormat7(Order)
 }
 
 object Service extends OrderProtocol {
-
   private val config = ConfigFactory.load()
+  private val allowedOrigin = HttpOrigin(config.getString("api.cors.allowedOrigin"))
 
   def main(args: Array[String]): Unit = {
     implicit val system = ActorSystem()
@@ -31,17 +33,19 @@ object Service extends OrderProtocol {
     implicit val ec = system.dispatcher
 
     val route =
-      path("orders") {
-        post {
-          entity(as[Order]) { order =>
-            val created = createOrder(order)
+      withCorsHeaders {
+        preflightRequestHandler ~
+          path("orders") {
+            post {
+              entity(as[Order]) { order =>
+                val created = createOrder(order)
 
-            onComplete(created) { created =>
-              complete(created)
+                onComplete(created) { created =>
+                  complete(created)
+                }
+              }
             }
           }
-
-        }
       }
 
     val hostname = config.getString("api.host")
@@ -60,6 +64,18 @@ object Service extends OrderProtocol {
           println("Done.")
         } // and shutdown when done
     })
+  }
+
+  private def withCorsHeaders: Directive0 = {
+    respondWithHeaders(
+      `Access-Control-Allow-Origin`(allowedOrigin),
+      `Access-Control-Allow-Headers`("Content-Type")
+    )
+  }
+
+  //this handles preflight OPTIONS requests.
+  private def preflightRequestHandler: Route = options {
+    complete(HttpResponse(StatusCodes.OK).withHeaders(`Access-Control-Allow-Methods`(OPTIONS, POST, PUT, GET, DELETE)))
   }
 
   private def createOrder(order: Order)(implicit executionContext: ExecutionContext): Future[Order] = {
