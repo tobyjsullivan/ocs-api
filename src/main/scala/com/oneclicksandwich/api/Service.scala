@@ -33,19 +33,21 @@ object Service extends OrderProtocol {
     implicit val ec = system.dispatcher
 
     val route =
-      withCorsHeaders {
-        preflightRequestHandler ~
-          path("orders") {
-            post {
-              entity(as[Order]) { order =>
-                val created = createOrder(order)
+      headerValueByType[Origin]() { origin =>
+        withCorsHeaders(origin) {
+          preflightRequestHandler ~
+            path("orders") {
+              post {
+                entity(as[Order]) { order =>
+                  val created = createOrder(order)
 
-                onComplete(created) { created =>
-                  complete(created)
+                  onComplete(created) { created =>
+                    complete(created)
+                  }
                 }
               }
             }
-          }
+        }
       }
 
     val hostname = config.getString("api.host")
@@ -66,11 +68,16 @@ object Service extends OrderProtocol {
     })
   }
 
-  private def withCorsHeaders: Directive0 = {
+  private def withCorsHeaders(origin: Origin): Directive0 = {
     respondWithHeaders(
-      `Access-Control-Allow-Origin`(allowedOrigin),
+      allowOrigin(origin),
       `Access-Control-Allow-Headers`("Content-Type")
     )
+  }
+
+  private def allowOrigin(origin: Origin): `Access-Control-Allow-Origin` = origin.origins match {
+    case Seq(head) if head.host == allowedOrigin.host => `Access-Control-Allow-Origin`(head)
+    case _ => `Access-Control-Allow-Origin`.`null`
   }
 
   //this handles preflight OPTIONS requests.
