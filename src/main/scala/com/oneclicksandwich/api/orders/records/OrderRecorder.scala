@@ -1,11 +1,11 @@
 package com.oneclicksandwich.api.orders.records
 
 import akka.Done
-import com.amazonaws.auth.{DefaultAWSCredentialsProviderChain}
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder
 import com.amazonaws.services.dynamodbv2.document._
-import com.oneclicksandwich.api.orders.Order
+import com.oneclicksandwich.api.orders.{AcceptedOrder, Order}
 import org.joda.time.Instant
 import org.joda.time.format.ISODateTimeFormat
 
@@ -23,33 +23,30 @@ object OrderRecorder {
 
   /**
     * Saves a record of the order to our DynamoDB table
-    * @param order
+    * @param accepted
     * @return
     */
-  def saveOrderRecord(order: Order)(implicit executionContext: ExecutionContext): Future[Done] = order match {
-    case Order(None, _, _, _, _, _, _) => Future.failed(new IllegalArgumentException("Order must have an ID before saving."))
-    case _ => Future {
+  def saveOrderRecord(accepted: AcceptedOrder)(implicit executionContext: ExecutionContext): Future[Done] = Future {
       val dynamoDB = new DynamoDB(client)
 
       val table = dynamoDB.getTable(ordersTable)
 
-      table.putItem(buildItem(order))
+      table.putItem(buildItem(accepted))
 
       Done
     }
-  }
 
-  private def buildItem(order: Order): Item = {
+  private def buildItem(accepted: AcceptedOrder): Item = {
     val baseItem = new Item()
-      .withPrimaryKey("ID", order.id.get)
+      .withPrimaryKey("ID", accepted.id)
 
     Map[String, String](
-      "Name" -> order.name,
-      "Phone" -> order.phone,
-      "Address 1" -> order.address1,
-      "Address 2" -> order.address2,
-      "Postal Code" -> order.postalCode,
-      "Additional Instructions" -> order.additionalInstructions,
+      "Name" -> accepted.order.name,
+      "Phone" -> accepted.order.phone,
+      "Address 1" -> accepted.order.address1,
+      "Address 2" -> accepted.order.address2,
+      "Postal Code" -> accepted.order.postalCode,
+      "Additional Instructions" -> accepted.order.additionalInstructions,
       "Timestamp" -> dateFmt.print(new Instant())
     ).foldLeft(baseItem) {
       case (item, (key, value)) if !value.isEmpty => item.withString(key, value)

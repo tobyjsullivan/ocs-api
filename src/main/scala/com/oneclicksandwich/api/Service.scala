@@ -12,7 +12,7 @@ import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.model.headers._
 import akka.http.scaladsl.server.Directives._
-import com.oneclicksandwich.api.orders.{Driver, Order}
+import com.oneclicksandwich.api.orders.{AcceptedOrder, Driver, Order}
 import com.oneclicksandwich.api.orders.records.OrderRecorder
 import com.typesafe.config.ConfigFactory
 import spray.json._
@@ -20,7 +20,19 @@ import spray.json._
 import scala.concurrent.{ExecutionContext, Future}
 
 trait OrderProtocol extends SprayJsonSupport with DefaultJsonProtocol {
-  implicit val orderFormat = jsonFormat7(Order)
+  implicit val orderFormat: RootJsonFormat[Order] = jsonFormat6(Order)
+//  implicit val acceptedOrderFormat: RootJsonFormat[AcceptedOrder] = jsonFormat2(AcceptedOrder)
+
+  implicit object acceptedOrderFormat extends RootJsonFormat[AcceptedOrder] {
+    override def write(obj: AcceptedOrder): JsValue = {
+      val order = obj.order.toJson.asJsObject
+
+      order.copy(fields = order.fields + ("id" -> JsString(obj.id)))
+    }
+
+    // Parsing isn't needed
+    override def read(json: JsValue): AcceptedOrder = ???
+  }
 }
 
 object Service extends OrderProtocol {
@@ -39,10 +51,10 @@ object Service extends OrderProtocol {
             path("orders") {
               post {
                 entity(as[Order]) { order =>
-                  val created = createOrder(order)
+                  val fAccepted = acceptOrder(order)
 
-                  onComplete(created) { created =>
-                    complete(created)
+                  onComplete(fAccepted) { accepted =>
+                    complete(accepted)
                   }
                 }
               }
@@ -54,7 +66,7 @@ object Service extends OrderProtocol {
     val port = config.getInt("api.port")
     val bindingFuture = Http().bindAndHandle(route, interface = hostname, port = port)
 
-    println(s"Server listening to ${hostname} on port ${port}")
+    println(s"Server listening to $hostname on port $port")
 
     sys.addShutdownHook({
       println("Shutting down...")
@@ -85,22 +97,14 @@ object Service extends OrderProtocol {
     complete(HttpResponse(StatusCodes.OK).withHeaders(`Access-Control-Allow-Methods`(OPTIONS, POST, PUT, GET, DELETE)))
   }
 
-  private def createOrder(order: Order)(implicit executionContext: ExecutionContext): Future[Order] = {
-    val withId = order.copy(id = Some(UUID.randomUUID().toString))
-
-    Future.sequence(
-      Seq(
-        OrderRecorder.saveOrderRecord(withId),
-        Driver.notify(withId)
-//        notifyCustomer(withId)
-      )
-    ).map(_ => withId)
+  private def acceptOrder(order: Order)(implicit executionContext: ExecutionContext): Future[AcceptedOrder] = {
+    order.accept().flatMap { accepted =>
+      Future.sequence(
+        Seq(
+          OrderRecorder.saveOrderRecord(accepted),
+          Driver.notify(order)
+        )
+      ).map(_ => accepted)
+    }
   }
-
-  /**
-    * Sends an SMS to the phone # on the order notifying of pending delivery.
-    * @param order
-    * @return
-    */
-  private def notifyCustomer(order: Order): Future[Done] = ???
 }
