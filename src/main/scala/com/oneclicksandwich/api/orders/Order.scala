@@ -30,7 +30,16 @@ case class Order(
 
 object OrderAcceptedEvent extends DefaultJsonProtocol {
   private implicit val orderFmt = jsonFormat6(Order)
-  private implicit val acceptedOrderFmt = jsonFormat2(AcceptedOrder)
+  implicit object acceptedOrderFormat extends RootJsonFormat[AcceptedOrder] {
+    override def write(obj: AcceptedOrder): JsValue = {
+      val order = obj.order.toJson.asJsObject
+
+      order.copy(fields = order.fields + ("id" -> JsString(obj.id)))
+    }
+
+    // Parsing isn't needed
+    override def read(json: JsValue): AcceptedOrder = ???
+  }
 
   def fire(acceptedOrder: AcceptedOrder)(implicit executionContext: ExecutionContext): Future[Done] = {
     val content = acceptedOrder.toJson.prettyPrint
