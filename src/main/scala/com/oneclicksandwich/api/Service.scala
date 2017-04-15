@@ -12,7 +12,7 @@ import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.model.headers._
 import akka.http.scaladsl.server.Directives._
-import com.oneclicksandwich.api.orders.{AcceptedOrder, Driver, Order}
+import com.oneclicksandwich.api.orders.{AcceptedOrder, Order}
 import com.oneclicksandwich.api.orders.records.OrderRecorder
 import com.typesafe.config.ConfigFactory
 import spray.json._
@@ -99,12 +99,7 @@ object Service extends OrderProtocol {
 
   private def acceptOrder(order: Order)(implicit executionContext: ExecutionContext): Future[AcceptedOrder] = {
     order.accept().flatMap { accepted =>
-      Future.sequence(
-        Seq(
-          OrderRecorder.saveOrderRecord(accepted),
-          Driver.notify(order)
-        )
-      ).map(_ => accepted)
+      OrderRecorder.saveOrderRecord(accepted).map(_ => accepted)
     }
   }
 }
