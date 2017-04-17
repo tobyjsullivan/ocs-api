@@ -1,2 +1,2 @@
-docker build -t tobyjsullivan/ocs-api .
+docker build -t tobyjsullivan/ocs-api . && \
 docker run --env-file .env -p 8081:8080 -it tobyjsullivan/ocs-api
