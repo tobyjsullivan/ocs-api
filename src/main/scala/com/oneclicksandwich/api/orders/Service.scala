@@ -3,6 +3,7 @@ package com.oneclicksandwich.api.orders
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshalling.Marshal
+import akka.http.scaladsl.model.HttpEntity
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshaller
 import akka.stream.Materializer
@@ -19,11 +20,12 @@ object Service extends DefaultJsonProtocol {
   private implicit val orderFmt = jsonFormat6(Order)
   private implicit object acceptedOrderFmt extends RootJsonReader[AcceptedOrder] {
     override def read(json: JsValue): AcceptedOrder = {
-      val order = json.asInstanceOf[Order]
+      println("Parsing:", json)
+      val order = json.convertTo[Order]
 
       json.asJsObject.getFields("id") match {
         case Seq(JsString(id)) => AcceptedOrder(id, order)
-        case _ => deserializationError("Expected an id in response")
+        case _ => deserializationError("Expected an order object")
       }
     }
   }
@@ -34,14 +36,13 @@ object Service extends DefaultJsonProtocol {
       // Forward request to Orders svc
       val uri = Uri.from(scheme = "http", host = ordersSvcHost, port = ordersSvcPort, path = "/orders")
       Http().singleRequest(HttpRequest(method = HttpMethods.POST, uri = uri, entity = entity))
-    }.flatMap {
-      case HttpResponse(StatusCodes.OK, _, entity, _) =>
-        // Deserialize response order
-        val unmarshaller = Unmarshaller
-          .stringUnmarshaller
-          .forContentTypes(ContentTypes.`application/json`)
-          .map(_.parseJson.convertTo[AcceptedOrder])
-        unmarshaller.apply(entity)
+    }.map {
+      case HttpResponse(StatusCodes.OK, _, HttpEntity.Strict(_, content), _) =>
+        println("Content: ", content.utf8String)
+        // Deserialize Order
+        content.utf8String.parseJson.convertTo[AcceptedOrder]
+      case HttpResponse(StatusCodes.OK, _, HttpEntity.Strict(contentType, _), _) =>
+        throw new Exception(String.format("Unexpected content-type: %s", contentType))
       case HttpResponse(_, _, entity, _) =>
         throw new Exception(String.format("Unexpected error: %s", entity))
     }
