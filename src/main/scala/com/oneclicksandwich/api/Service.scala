@@ -1,8 +1,5 @@
 package com.oneclicksandwich.api
 
-import java.util.UUID
-
-import akka.Done
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.http.scaladsl.Http
@@ -13,25 +10,18 @@ import akka.http.scaladsl.server._
 import akka.http.scaladsl.model.headers._
 import akka.http.scaladsl.server.Directives._
 import com.oneclicksandwich.api.orders.{AcceptedOrder, Order}
-import com.oneclicksandwich.api.orders.records.OrderRecorder
 import com.typesafe.config.ConfigFactory
 import spray.json._
 
-import scala.concurrent.{ExecutionContext, Future}
-
 trait OrderProtocol extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val orderFormat: RootJsonFormat[Order] = jsonFormat6(Order)
-//  implicit val acceptedOrderFormat: RootJsonFormat[AcceptedOrder] = jsonFormat2(AcceptedOrder)
 
-  implicit object acceptedOrderFormat extends RootJsonFormat[AcceptedOrder] {
+  implicit object acceptedOrderFormat extends RootJsonWriter[AcceptedOrder] {
     override def write(obj: AcceptedOrder): JsValue = {
       val order = obj.order.toJson.asJsObject
 
       order.copy(fields = order.fields + ("id" -> JsString(obj.id)))
     }
-
-    // Parsing isn't needed
-    override def read(json: JsValue): AcceptedOrder = ???
   }
 }
 
@@ -51,7 +41,7 @@ object Service extends OrderProtocol {
             path("orders") {
               post {
                 entity(as[Order]) { order =>
-                  val fAccepted = acceptOrder(order)
+                  val fAccepted = orders.Service.accept(order)
 
                   onComplete(fAccepted) { accepted =>
                     complete(accepted)
@@ -95,11 +85,5 @@ object Service extends OrderProtocol {
   //this handles preflight OPTIONS requests.
   private def preflightRequestHandler: Route = options {
     complete(HttpResponse(StatusCodes.OK).withHeaders(`Access-Control-Allow-Methods`(OPTIONS, POST, PUT, GET, DELETE)))
-  }
-
-  private def acceptOrder(order: Order)(implicit executionContext: ExecutionContext): Future[AcceptedOrder] = {
-    order.accept().flatMap { accepted =>
-      OrderRecorder.saveOrderRecord(accepted).map(_ => accepted)
-    }
   }
 }
