@@ -1,2 +1,2 @@
-docker build -t tobyjsullivan/ocs-api:latest . && \
-docker push tobyjsullivan/ocs-api:latest
+docker build -t tobyjsullivan/ocs-api:v2 . && \
+docker push tobyjsullivan/ocs-api:v2
